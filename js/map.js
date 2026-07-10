@@ -24,6 +24,7 @@ export function createMap(el, handlers) {
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
   }).addTo(map);
 
+  const regionLayer = L.layerGroup().addTo(map);
   const markerLayer = L.layerGroup().addTo(map);
   const routeLayer = L.layerGroup().addTo(map);
   let highlightDot = null;
@@ -91,6 +92,22 @@ export function createMap(el, handlers) {
           ).addTo(routeLayer);
         }
       });
+    },
+
+    // Dashed rectangles showing where offline routing data exists.
+    setRegions(regions, highlightId = null) {
+      regionLayer.clearLayers();
+      for (const r of regions) {
+        const hot = r.id === highlightId;
+        L.rectangle([[r.bbox[0], r.bbox[1]], [r.bbox[2], r.bbox[3]]], {
+          color: '#4fa3ff',
+          weight: hot ? 2.5 : 1.5,
+          dashArray: '4 6',
+          fillColor: '#4fa3ff',
+          fillOpacity: hot ? 0.12 : 0.04,
+          interactive: false,
+        }).addTo(regionLayer);
+      }
     },
 
     setHighlight(latlng) {

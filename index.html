@@ -5,6 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>brx — offline routing, shareable URLs</title>
 <meta name="theme-color" content="#1e1e28">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="apple-touch-icon" href="/icon-192.png">
 <link rel="manifest" href="/manifest.webmanifest">
 </head>
 <body>
@@ -32,6 +36,7 @@
     <div id="region-progress" class="hint" hidden></div>
     <ul id="region-list"></ul>
   </details>
+  <button id="install" hidden title="Install brx on this device">📲 Install app</button>
   <div class="row">
     <button id="reverse" title="Reverse route">⇅ Reverse</button>
     <button id="clear" title="Remove all waypoints">✕ Clear</button>

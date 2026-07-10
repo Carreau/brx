@@ -7,7 +7,7 @@ import { createLocalRouter } from './localrouting.js';
 import { createMap } from './map.js';
 import { createElevationProfile } from './elevation.js';
 import { toGPX, parseGPX } from './gpx.js';
-import { registerPWA } from './pwa.js';
+import { registerPWA, setupInstall } from './pwa.js';
 
 const BROUTER_DEFAULT = 'https://brouter.de/brouter';
 const DEFAULT_VIEW = { lat: 48.8584, lng: 2.2945, zoom: 12 };
@@ -297,9 +297,12 @@ $('file').onchange = async () => {
 
 async function refreshRegions() {
   const regions = await localRouter.listRegions().catch(() => []);
+  map.setRegions(regions);
   const list = $('region-list');
   list.replaceChildren(...regions.map((r) => {
     const li = document.createElement('li');
+    li.onmouseenter = () => map.setRegions(regions, r.id);
+    li.onmouseleave = () => map.setRegions(regions);
     const name = Object.assign(document.createElement('span'), {
       className: 'region-name', textContent: r.name, title: r.name,
     });
@@ -360,3 +363,4 @@ refreshRegions();
 reroute();
 writeUrl(true);
 registerPWA();
+setupInstall($('install'));
