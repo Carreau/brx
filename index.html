@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>brx — local routing, shareable URLs</title>
+</head>
+<body>
+<div id="map"></div>
+
+<div id="toolbar" class="panel">
+  <div class="brand">brx</div>
+  <label>Profile
+    <select id="profile">
+      <option value="trekking">trekking</option>
+      <option value="fastbike">fastbike</option>
+      <option value="car-fast">car-fast</option>
+      <option value="shortest">shortest</option>
+      <option value="hiking-mountain">hiking-mountain</option>
+    </select>
+  </label>
+  <label>BRouter
+    <input id="endpoint" type="text" spellcheck="false" title="BRouter endpoint URL">
+  </label>
+  <div class="row">
+    <button id="reverse" title="Reverse route">⇅ Reverse</button>
+    <button id="clear" title="Remove all waypoints">✕ Clear</button>
+  </div>
+  <div class="row">
+    <button id="import" title="Import GPX">Import GPX</button>
+    <button id="export" title="Export GPX" disabled>Export GPX</button>
+    <input id="file" type="file" accept=".gpx,application/gpx+xml" hidden>
+  </div>
+  <div id="stats" class="stats" hidden>
+    <span id="stat-dist"></span>
+    <span id="stat-ascend"></span>
+    <span id="stat-time"></span>
+  </div>
+  <div class="hint">Click the map to add waypoints · click the route to insert a via ·
+    right-click a marker to delete · drag to move</div>
+</div>
+
+<div id="banner" class="banner" hidden>
+  <span id="banner-text"></span>
+  <button id="banner-fallback" hidden>Use brouter.de</button>
+  <button id="banner-close">✕</button>
+</div>
+
+<div id="elevation-panel" class="panel elevation" hidden>
+  <canvas id="elevation"></canvas>
+</div>
+
+<script type="module" src="/js/app.js"></script>
+</body>
+</html>

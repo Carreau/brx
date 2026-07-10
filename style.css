@@ -1,0 +1,139 @@
+:root {
+  --panel-bg: #1e1e28;
+  --panel-bg-soft: #2a2a38;
+  --accent: #ff6b35;
+  --text: #e8e8ee;
+  --muted: #9a9aab;
+  --danger: #e05555;
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+html, body { margin: 0; height: 100%; }
+#map { position: absolute; inset: 0; }
+
+.panel {
+  position: absolute;
+  z-index: 1000;
+  background: var(--panel-bg);
+  color: var(--text);
+  border-radius: 10px;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, .35);
+  padding: 12px;
+}
+
+#toolbar {
+  top: 12px;
+  left: 12px;
+  width: 230px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.brand {
+  font-weight: 700;
+  font-size: 16px;
+  letter-spacing: .06em;
+  color: var(--accent);
+}
+
+#toolbar label {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  color: var(--muted);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+
+#toolbar select, #toolbar input[type="text"] {
+  background: var(--panel-bg-soft);
+  color: var(--text);
+  border: 1px solid #3a3a4c;
+  border-radius: 6px;
+  padding: 6px 8px;
+  font-size: 13px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.row { display: flex; gap: 6px; }
+
+button {
+  background: var(--panel-bg-soft);
+  color: var(--text);
+  border: 1px solid #3a3a4c;
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 12px;
+  cursor: pointer;
+  flex: 1;
+}
+button:hover:not(:disabled) { border-color: var(--accent); }
+button:disabled { opacity: .45; cursor: default; }
+
+.stats {
+  display: flex;
+  gap: 10px;
+  background: var(--panel-bg-soft);
+  border-radius: 6px;
+  padding: 7px 9px;
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.hint { color: var(--muted); font-size: 11px; line-height: 1.45; }
+
+.banner {
+  position: absolute;
+  z-index: 1100;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: 60vw;
+  background: var(--danger);
+  color: #fff;
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, .35);
+}
+.banner button { flex: none; background: rgba(0,0,0,.25); border: none; color: #fff; }
+#banner-close { padding: 4px 8px; }
+
+.elevation {
+  left: 12px;
+  right: 12px;
+  bottom: 12px;
+  height: 150px;
+  padding: 6px;
+}
+.elevation canvas { width: 100%; height: 100%; display: block; }
+
+.wp-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  border: 2px solid #fff;
+  box-shadow: 0 1px 5px rgba(0, 0, 0, .5);
+  box-sizing: border-box;
+}
+.wp-icon.start { background: #2e9e44; }
+.wp-icon.end   { background: #d43f3f; }
+
+@media (max-width: 640px) {
+  #toolbar { width: calc(100vw - 48px); }
+  .banner { max-width: 85vw; }
+}
