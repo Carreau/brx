@@ -87,6 +87,35 @@ button:disabled { opacity: .45; cursor: default; }
 
 .hint { color: var(--muted); font-size: 11px; line-height: 1.45; }
 
+#regions-box summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  margin-bottom: 6px;
+}
+#region-list {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+}
+#region-list li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--panel-bg-soft);
+  border-radius: 6px;
+  padding: 4px 8px;
+}
+#region-list .region-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#region-list .region-size { color: var(--muted); font-size: 11px; }
+#region-list button { flex: none; padding: 2px 7px; }
+
 .banner {
   position: absolute;
   z-index: 1100;

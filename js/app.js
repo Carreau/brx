@@ -2,37 +2,48 @@ import 'leaflet/dist/leaflet.css';
 import '../style.css';
 
 import { parseHash, buildHash, DEFAULT_ENDPOINT, DEFAULT_PROFILE } from './urlstate.js';
-import { routeSegment } from './routing.js';
+import { routeSegment as brouterSegment } from './routing.js';
+import { createLocalRouter } from './localrouting.js';
 import { createMap } from './map.js';
 import { createElevationProfile } from './elevation.js';
 import { toGPX, parseGPX } from './gpx.js';
+import { registerPWA } from './pwa.js';
 
-const FALLBACK_ENDPOINT = 'https://brouter.de/brouter';
+const BROUTER_DEFAULT = 'https://brouter.de/brouter';
 const DEFAULT_VIEW = { lat: 48.8584, lng: 2.2945, zoom: 12 };
+const PROFILES = {
+  local: ['bike', 'foot', 'car'],
+  brouter: ['trekking', 'fastbike', 'car-fast', 'shortest', 'hiking-mountain'],
+};
 
 // ---------------------------------------------------------------- state
 
 const state = parseHash(location.hash);
+const localRouter = createLocalRouter();
 
 // segments[i] routes points[i] -> points[i+1].
-// Each entry: { key, coords, distance, ascend, time } or null while pending.
 let segments = [];
-const segmentCache = new Map(); // key -> resolved segment
-let applyingHash = false; // suppress URL writes while restoring from the URL
+const segmentCache = new Map();
+let applyingHash = false;
+let lastBrouterUrl = state.endpoint !== 'local' ? state.endpoint : BROUTER_DEFAULT;
 
+const engine = () => (state.endpoint === 'local' ? 'local' : 'brouter');
 const segKey = (a, b) =>
   `${a.lat.toFixed(5)},${a.lng.toFixed(5)}|${b.lat.toFixed(5)},${b.lng.toFixed(5)}|${state.profile}|${state.endpoint}`;
 
 // ---------------------------------------------------------------- dom
 
 const $ = (id) => document.getElementById(id);
+const engineSel = $('engine');
 const profileSel = $('profile');
+const endpointRow = $('endpoint-row');
 const endpointInput = $('endpoint');
 const statsEl = $('stats');
 const banner = $('banner');
 const bannerText = $('banner-text');
 const bannerFallback = $('banner-fallback');
 const elevationPanel = $('elevation-panel');
+const regionProgress = $('region-progress');
 
 // ---------------------------------------------------------------- map & elevation
 
@@ -79,6 +90,13 @@ function allCoords() {
 let routeEpoch = 0;
 let aborters = [];
 
+function routeOne({ from, to, signal }) {
+  if (engine() === 'local') {
+    return localRouter.routeSegment({ from, to, profile: state.profile, signal });
+  }
+  return brouterSegment({ from, to, profile: state.profile, endpoint: state.endpoint, signal });
+}
+
 async function reroute() {
   routeEpoch += 1;
   const epoch = routeEpoch;
@@ -86,10 +104,7 @@ async function reroute() {
   aborters = [];
 
   const pts = state.points;
-  segments = pts.slice(0, -1).map((p, i) => {
-    const cached = segmentCache.get(segKey(p, pts[i + 1]));
-    return cached ?? null;
-  });
+  segments = pts.slice(0, -1).map((p, i) => segmentCache.get(segKey(p, pts[i + 1])) ?? null);
   render();
 
   const jobs = segments.map(async (seg, i) => {
@@ -98,18 +113,10 @@ async function reroute() {
     const aborter = new AbortController();
     aborters.push(aborter);
     try {
-      const result = await routeSegment({
-        from: pts[i],
-        to: pts[i + 1],
-        profile: state.profile,
-        endpoint: state.endpoint,
-        signal: aborter.signal,
-      });
+      const result = await routeOne({ from: pts[i], to: pts[i + 1], signal: aborter.signal });
       if (epoch !== routeEpoch) return;
       segmentCache.set(key, result);
-      if (segmentCache.size > 500) {
-        segmentCache.delete(segmentCache.keys().next().value);
-      }
+      if (segmentCache.size > 500) segmentCache.delete(segmentCache.keys().next().value);
       segments[i] = result;
       render();
     } catch (err) {
@@ -130,9 +137,13 @@ function render() {
   const complete = segments.length > 0 && done.length === segments.length;
 
   $('export').disabled = !complete;
-  elevationPanel.hidden = !complete;
-  if (complete) elevation.setData(allCoords());
-  else elevation.setData([]);
+
+  // Elevation only when the engine provided elevations (BRouter does,
+  // the offline graph doesn't).
+  const coords = complete ? allCoords() : [];
+  const hasEle = coords.some((c) => Number.isFinite(c.ele));
+  elevationPanel.hidden = !(complete && hasEle);
+  elevation.setData(complete && hasEle ? coords : []);
 
   statsEl.hidden = done.length === 0;
   if (done.length) {
@@ -140,14 +151,15 @@ function render() {
     const asc = done.reduce((s, x) => s + x.ascend, 0);
     const time = done.reduce((s, x) => s + x.time, 0);
     $('stat-dist').textContent = `${(dist / 1000).toFixed(1)} km`;
-    $('stat-ascend').textContent = `↗ ${Math.round(asc)} m`;
+    $('stat-ascend').textContent = asc > 0 ? `↗ ${Math.round(asc)} m` : '';
     $('stat-time').textContent = formatTime(time);
   }
 }
 
 function formatTime(s) {
-  const h = Math.floor(s / 3600);
-  const m = Math.round((s % 3600) / 60);
+  const totalMin = Math.round(s / 60);
+  const h = Math.floor(totalMin / 60);
+  const m = totalMin % 60;
   return h ? `${h} h ${String(m).padStart(2, '0')}` : `${m} min`;
 }
 
@@ -155,21 +167,19 @@ function formatTime(s) {
 
 function showError(err) {
   bannerText.textContent = err.message;
-  const isLocal = state.endpoint === DEFAULT_ENDPOINT;
-  const isNetwork = err instanceof TypeError || /fetch|network/i.test(err.message);
-  bannerFallback.hidden = !(isLocal && isNetwork);
-  if (bannerFallback.hidden === false) {
-    bannerText.textContent =
-      `Cannot reach the local BRouter at ${DEFAULT_ENDPOINT} — start it with scripts/run-brouter.sh, or:`;
-  }
+  // Local engine lacking data: offer a one-click switch to online routing.
+  bannerFallback.hidden = !(engine() === 'local' && /routing data/i.test(err.message));
   banner.hidden = false;
 }
 
 $('banner-close').onclick = () => { banner.hidden = true; };
 bannerFallback.onclick = () => {
   banner.hidden = true;
-  endpointInput.value = FALLBACK_ENDPOINT;
-  setEndpoint(FALLBACK_ENDPOINT);
+  state.endpoint = lastBrouterUrl;
+  if (!PROFILES.brouter.includes(state.profile)) state.profile = PROFILES.brouter[0];
+  syncControls();
+  writeUrl();
+  reroute();
 };
 
 // ---------------------------------------------------------------- url sync
@@ -189,8 +199,7 @@ function applyHash() {
   state.profile = s.profile;
   state.endpoint = s.endpoint;
   if (s.map) { state.map = s.map; map.setView(s.map); }
-  profileSel.value = state.profile;
-  endpointInput.value = state.endpoint;
+  syncControls();
   banner.hidden = true;
   reroute();
   applyingHash = false;
@@ -208,19 +217,54 @@ function pushPoints(pts) {
 
 // ---------------------------------------------------------------- controls
 
+function syncControls() {
+  const eng = engine();
+  engineSel.value = eng;
+  endpointRow.hidden = eng !== 'brouter';
+  endpointInput.value = eng === 'brouter' ? state.endpoint : lastBrouterUrl;
+
+  const profiles = PROFILES[eng];
+  profileSel.replaceChildren(
+    ...profiles.map((p) => Object.assign(document.createElement('option'), { value: p, textContent: p })),
+  );
+  if (!profiles.includes(state.profile)) {
+    // Keep an unknown profile from the URL selectable (BRouter may know it).
+    if (eng === 'brouter' && state.profile) {
+      profileSel.append(Object.assign(document.createElement('option'), { value: state.profile, textContent: state.profile }));
+    } else {
+      state.profile = profiles[0];
+    }
+  }
+  profileSel.value = state.profile;
+}
+
+engineSel.onchange = () => {
+  if (engineSel.value === 'local') {
+    if (state.endpoint !== 'local') lastBrouterUrl = state.endpoint;
+    state.endpoint = 'local';
+  } else {
+    state.endpoint = lastBrouterUrl;
+  }
+  if (!PROFILES[engine()].includes(state.profile)) state.profile = PROFILES[engine()][0];
+  syncControls();
+  writeUrl();
+  reroute();
+};
+
 profileSel.onchange = () => {
   state.profile = profileSel.value;
   writeUrl();
   reroute();
 };
 
-function setEndpoint(value) {
-  state.endpoint = value.trim().replace(/\/+$/, '') || DEFAULT_ENDPOINT;
-  endpointInput.value = state.endpoint;
+endpointInput.onchange = () => {
+  const v = endpointInput.value.trim().replace(/\/+$/, '') || BROUTER_DEFAULT;
+  state.endpoint = v;
+  lastBrouterUrl = v;
+  syncControls();
   writeUrl();
   reroute();
-}
-endpointInput.onchange = () => setEndpoint(endpointInput.value);
+};
 
 $('reverse').onclick = () => pushPoints(state.points.slice().reverse());
 $('clear').onclick = () => pushPoints([]);
@@ -249,18 +293,70 @@ $('file').onchange = async () => {
   }
 };
 
+// ---------------------------------------------------------------- offline regions
+
+async function refreshRegions() {
+  const regions = await localRouter.listRegions().catch(() => []);
+  const list = $('region-list');
+  list.replaceChildren(...regions.map((r) => {
+    const li = document.createElement('li');
+    const name = Object.assign(document.createElement('span'), {
+      className: 'region-name', textContent: r.name, title: r.name,
+    });
+    const size = Object.assign(document.createElement('span'), {
+      className: 'region-size', textContent: `${(r.bytes / 1e6).toFixed(1)} MB`,
+    });
+    const del = Object.assign(document.createElement('button'), { textContent: '✕', title: 'Delete' });
+    del.onclick = async () => {
+      await localRouter.deleteRegion(r.id);
+      refreshRegions();
+      if (engine() === 'local') reroute();
+    };
+    li.append(name, size, del);
+    return li;
+  }));
+}
+
+$('download-region').onclick = async () => {
+  const b = map.getBounds(); // [s, w, n, e]
+  const area = (b[2] - b[0]) * (b[3] - b[1]);
+  if (area > 0.15 &&
+      !confirm('Large area — the download may be slow or rejected by Overpass. Zoom in for faster downloads. Continue?')) {
+    return;
+  }
+  const c = map.getView();
+  const name = `${c.lat.toFixed(3)}, ${c.lng.toFixed(3)} (z${c.zoom})`;
+  const btn = $('download-region');
+  btn.disabled = true;
+  regionProgress.hidden = false;
+  try {
+    await localRouter.downloadRegion({
+      bbox: b,
+      name,
+      onProgress(stage) {
+        regionProgress.textContent =
+          { download: 'Downloading OSM data…', build: 'Building routing graph…', store: 'Saving…' }[stage] ?? stage;
+      },
+    });
+    regionProgress.textContent = '';
+    regionProgress.hidden = true;
+    banner.hidden = true; // clear a stale "no routing data" error
+    await refreshRegions();
+    if (engine() === 'local') reroute();
+  } catch (err) {
+    regionProgress.hidden = true;
+    showError(err);
+  } finally {
+    btn.disabled = false;
+  }
+};
+
 // ---------------------------------------------------------------- boot
 
-profileSel.value = [...profileSel.options].some((o) => o.value === state.profile)
-  ? state.profile
-  : DEFAULT_PROFILE;
-if (profileSel.value !== state.profile) {
-  // Unknown profile in the URL: keep it in state (BRouter may know it) but
-  // leave the select on the default so the UI isn't blank.
-  profileSel.value = DEFAULT_PROFILE;
-}
-endpointInput.value = state.endpoint;
+syncControls();
 map.setView(state.map ?? DEFAULT_VIEW);
 if (state.points.length >= 2 && !location.hash.includes('map=')) map.fitPoints(state.points);
+refreshRegions();
 reroute();
 writeUrl(true);
+registerPWA();

@@ -47,8 +47,11 @@ export function createElevationProfile(canvas, { onHover } = {}) {
 
   function draw() {
     const dpr = window.devicePixelRatio || 1;
-    const w = canvas.clientWidth || canvas.width;
-    const h = canvas.clientHeight || canvas.height;
+    // clientWidth is 0 while the panel is display:none — never fall back to
+    // canvas.width (the backing store), or the buffer grows by dpr each draw.
+    const w = canvas.clientWidth;
+    const h = canvas.clientHeight;
+    if (!w || !h) return;
     if (canvas.width !== Math.round(w * dpr) || canvas.height !== Math.round(h * dpr)) {
       canvas.width = Math.round(w * dpr);
       canvas.height = Math.round(h * dpr);

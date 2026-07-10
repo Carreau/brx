@@ -1,7 +1,9 @@
 // Pure URL-hash (de)serialization for brx. No DOM/window access.
 
-export const DEFAULT_ENDPOINT = "http://localhost:17777/brouter";
-export const DEFAULT_PROFILE = "trekking";
+// endpoint "local" = the in-browser offline engine; anything else is a
+// BRouter HTTP endpoint (rt= in the hash).
+export const DEFAULT_ENDPOINT = "local";
+export const DEFAULT_PROFILE = "bike";
 
 const fmt = (n) => n.toFixed(5);
 

@@ -27,6 +27,7 @@ export function createMap(el, handlers) {
   const markerLayer = L.layerGroup().addTo(map);
   const routeLayer = L.layerGroup().addTo(map);
   let highlightDot = null;
+  let dragging = false;
 
   map.on('click', (e) => handlers.onMapClick?.(e.latlng));
   map.on('moveend', () => handlers.onMapMove?.(api.getView()));
@@ -36,19 +37,29 @@ export function createMap(el, handlers) {
       map.setView([lat, lng], zoom, { animate: false });
     },
 
+    getBounds() {
+      const b = map.getBounds();
+      return [b.getSouth(), b.getWest(), b.getNorth(), b.getEast()];
+    },
+
     getView() {
       const c = map.getCenter();
       return { lat: c.lat, lng: c.lng, zoom: map.getZoom() };
     },
 
     setPoints(points) {
+      // An async render (segment fetch resolving) must not destroy the marker
+      // under the user's cursor; the dragend reroute will re-sync markers.
+      if (dragging) return;
       markerLayer.clearLayers();
       points.forEach((p, i) => {
         const m = L.marker([p.lat, p.lng], {
           icon: waypointIcon(i, points.length),
           draggable: true,
         });
+        m.on('dragstart', () => { dragging = true; });
         m.on('dragend', () => {
+          dragging = false;
           const ll = m.getLatLng();
           handlers.onMarkerDrag?.(i, { lat: ll.lat, lng: ll.lng });
         });

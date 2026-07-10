@@ -3,25 +3,35 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>brx — local routing, shareable URLs</title>
+<title>brx — offline routing, shareable URLs</title>
+<meta name="theme-color" content="#1e1e28">
+<link rel="manifest" href="/manifest.webmanifest">
 </head>
 <body>
 <div id="map"></div>
 
 <div id="toolbar" class="panel">
   <div class="brand">brx</div>
-  <label>Profile
-    <select id="profile">
-      <option value="trekking">trekking</option>
-      <option value="fastbike">fastbike</option>
-      <option value="car-fast">car-fast</option>
-      <option value="shortest">shortest</option>
-      <option value="hiking-mountain">hiking-mountain</option>
+  <label>Engine
+    <select id="engine">
+      <option value="local">Local (offline)</option>
+      <option value="brouter">BRouter (online)</option>
     </select>
   </label>
-  <label>BRouter
+  <label>Profile
+    <select id="profile"></select>
+  </label>
+  <label id="endpoint-row" hidden>BRouter URL
     <input id="endpoint" type="text" spellcheck="false" title="BRouter endpoint URL">
   </label>
+  <details id="regions-box" open>
+    <summary>Offline data</summary>
+    <div class="row">
+      <button id="download-region" title="Download roads in the visible area for offline routing">⬇ Download visible area</button>
+    </div>
+    <div id="region-progress" class="hint" hidden></div>
+    <ul id="region-list"></ul>
+  </details>
   <div class="row">
     <button id="reverse" title="Reverse route">⇅ Reverse</button>
     <button id="clear" title="Remove all waypoints">✕ Clear</button>
@@ -42,7 +52,7 @@
 
 <div id="banner" class="banner" hidden>
   <span id="banner-text"></span>
-  <button id="banner-fallback" hidden>Use brouter.de</button>
+  <button id="banner-fallback" hidden>Route online instead</button>
   <button id="banner-close">✕</button>
 </div>
 

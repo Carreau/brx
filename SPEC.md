@@ -50,8 +50,8 @@ Main-thread facade over the engine:
 - `export function createLocalRouter()` →
   - `async listRegions()` → `[{id, name, bbox, createdAt, nodeCount, edgeCount, bytes}]`
   - `async downloadRegion({bbox, name, onProgress})` → region meta.
-    Fetches Overpass (`[out:json]`, ways with the highway classes above,
-    `out body geom`), builds the graph, stores it. `onProgress(stage, pct?)`
+    Fetches Overpass (`[out:json][timeout:90]`, ways with the highway classes
+    above, `out body geom qt`), builds the graph, stores it. `onProgress(stage, pct?)`
     with stages like `download`/`build`/`store`.
   - `async deleteRegion(id)`
   - `async routeSegment({from, to, profile, signal})` →
@@ -94,8 +94,8 @@ Main-thread facade over the engine:
 state = {
   map: { lat, lng, zoom } | null,     // last known map view
   points: [ { lat, lng }, ... ],      // routing waypoints, ordered
-  profile: "trekking",                // brouter profile name
-  endpoint: "http://localhost:17777/brouter"  // brouter base URL
+  profile: "bike",                    // routing profile
+  endpoint: "local"                   // "local" = offline engine, else BRouter URL
 }
 ```
 
@@ -109,14 +109,14 @@ Coordinates are serialized with 5 decimal places.
 
 - `map=zoom/lat/lng` — optional
 - `pts=lat,lng;lat,lng;...` — optional (empty/absent = no waypoints)
-- `profile=<name>` — optional, default `trekking`
-- `rt=<url-encoded endpoint>` — optional, only present when non-default
+- `profile=<name>` — optional, default `bike`
+- `rt=<url-encoded endpoint>` — optional; absent = local offline engine
 
 ## Module contracts (exact exported names)
 
 ### js/urlstate.js
-- `export const DEFAULT_ENDPOINT = "http://localhost:17777/brouter"`
-- `export const DEFAULT_PROFILE = "trekking"`
+- `export const DEFAULT_ENDPOINT = "local"`
+- `export const DEFAULT_PROFILE = "bike"`
 - `export function parseHash(hash)` → full state object (missing parts filled
   with defaults, `map: null` if absent). Accepts hash with or without leading
   `#`. Never throws; skips malformed points.
