@@ -9,6 +9,7 @@
 }
 
 html, body { margin: 0; height: 100%; }
+[hidden] { display: none !important; }
 #map { position: absolute; inset: 0; }
 
 .panel {

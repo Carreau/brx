@@ -1,7 +1,80 @@
-# brx — local BRouter routing with gpx.studio-style editing, state in the URL
+# brx — offline in-browser routing with gpx.studio-style editing, state in the URL
 
-Single-page app, no build step. Plain ES modules loaded from `index.html`.
-Leaflet 1.9 comes from CDN. All app files live at the repo root under `js/`.
+Single-page app, Vite build producing a **100% static** `dist/` that runs as an
+offline-capable PWA on a phone. Leaflet from npm. App files under `js/`.
+
+## v2 pivot: offline-first
+
+- Default routing engine is **local**: OSM data for a user-chosen region is
+  downloaded from Overpass while online, compiled to a compact graph stored in
+  IndexedDB, and routed with A* in a Web Worker. No server, works offline.
+- A service worker precaches the app shell and runtime-caches OSM map tiles
+  (cache-first) so browsed areas remain visible offline.
+- BRouter becomes an optional *online* engine (`rt=` in the hash selects it).
+- URL-state model unchanged: absent `rt=` ⇒ local engine. Local profiles:
+  `bike` (default), `foot`, `car`. BRouter profiles unchanged.
+
+### Region/graph data model (shared contract)
+
+A stored region (IndexedDB db `brx`, objectStore `regions`, keyPath `id`):
+
+```js
+{
+  id: string,            // crypto-ish unique id (from name + bbox)
+  name: string,
+  bbox: [s, w, n, e],
+  createdAt: number,     // ms epoch
+  nodeLat: Float64Array, // per graph node
+  nodeLng: Float64Array,
+  edgeA: Uint32Array,    // edge endpoints (node indices); every OSM way node
+  edgeB: Uint32Array,    //   is a graph node, so edge geometry is exact
+  edgeDist: Float32Array,// meters (haversine)
+  edgeCls: Uint8Array,   // index into HIGHWAY_CLASSES
+  edgeDir: Uint8Array,   // 0 = both ways, 1 = a->b only, 2 = b->a only
+}
+```
+
+`HIGHWAY_CLASSES` (exported constant, order matters):
+`motorway, motorway_link, trunk, trunk_link, primary, primary_link, secondary,
+secondary_link, tertiary, tertiary_link, unclassified, residential,
+living_street, service, track, cycleway, footway, path, pedestrian,
+bridleway, steps`
+
+Profile access/speed tables live in the router (worker): e.g. `car` can't use
+cycleway/footway/path/steps, `bike` can't use motorway*/trunk* and walks steps
+slowly, `foot` can use everything except motorway*/trunk*. `oneway` (edgeDir)
+applies to car and bike, not foot.
+
+### js/localrouting.js  (+ js/localgraph.js, js/router-worker.js)
+Main-thread facade over the engine:
+- `export function createLocalRouter()` →
+  - `async listRegions()` → `[{id, name, bbox, createdAt, nodeCount, edgeCount, bytes}]`
+  - `async downloadRegion({bbox, name, onProgress})` → region meta.
+    Fetches Overpass (`[out:json]`, ways with the highway classes above,
+    `out body geom`), builds the graph, stores it. `onProgress(stage, pct?)`
+    with stages like `download`/`build`/`store`.
+  - `async deleteRegion(id)`
+  - `async routeSegment({from, to, profile, signal})` →
+    `{coords: [{lat, lng}], distance, time, ascend: 0}` — same shape as
+    js/routing.js but no `ele`. Throws Error('No routing data here — download
+    this region first') when either endpoint snaps to nothing within ~250 m,
+    Error('No route found') when A* fails.
+- Worker owns graph memory (loads all stored regions, merged); main thread
+  messages `{id, type: 'route'|'reload'|..., payload}` / worker replies
+  `{id, ok, result|error}`. `signal` abort resolves to rejection with
+  `AbortError`-named error (worker keeps computing but reply is ignored;
+  A* on city graphs is fast enough).
+
+### PWA layer
+- `public/manifest.webmanifest` + icons (any simple generated placeholder).
+- `public/sw.js` hand-written: versioned precache of the app shell
+  (`/`, `/index.html`, `/assets/app.js`, `/assets/app.css`, manifest, icons),
+  cache-first with LRU-ish cap (~2000 entries) for `tile.openstreetmap.org`,
+  network-only for Overpass. Vite build must emit **unhashed** asset names
+  (`assets/app.js`, `assets/app.css`) via rollupOptions so the precache list
+  is stable — configured in vite.config.js.
+- `js/pwa.js`: `export function registerPWA()` — registers `/sw.js` (prod
+  only or when served), no-op on unsupported/file: contexts.
 
 ## Architecture
 
