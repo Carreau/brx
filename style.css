@@ -37,7 +37,32 @@ html, body { margin: 0; height: 100%; }
   font-size: 16px;
   letter-spacing: .06em;
   color: var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
+
+#collapse {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  font-size: 16px;
+  line-height: 1;
+  color: var(--muted);
+  border-radius: 6px;
+}
+
+#toolbar-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Collapsed: hide the body, shrink to just the brand row. */
+#toolbar.collapsed { width: auto; }
+#toolbar.collapsed #toolbar-body { display: none; }
+#toolbar.collapsed #collapse { transform: rotate(180deg); }
 
 #toolbar label {
   display: flex;

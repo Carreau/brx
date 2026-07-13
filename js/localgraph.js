@@ -100,36 +100,62 @@ export function buildGraphFromOverpass(elements, bbox) {
   };
 }
 
-// mergeGraphs(graphs) -> single graph (concat + reindex node ids). No dedup:
-// overlapping regions simply carry duplicate nodes/edges, which is harmless.
+// mergeGraphs(graphs) -> single graph, deduplicating nodes shared across
+// regions by coordinate. Overpass `out geom` returns identical coordinates for
+// the same OSM node in each region's download, so nodes at the same location
+// collapse to one index — this stitches overlapping regions into one connected
+// graph. Without it, an overlapping road exists as two disjoint copies (one per
+// region) and routing from a point in region A to a point in region B, where
+// each point lies only in its own region, finds no path across the seam.
+const COORD_KEY_DP = 7; // ~1cm; matches Overpass geometry precision
+function coordKey(lat, lng) {
+  return `${lat.toFixed(COORD_KEY_DP)},${lng.toFixed(COORD_KEY_DP)}`;
+}
 export function mergeGraphs(graphs) {
   const gs = graphs.filter(Boolean);
-  const nNodes = gs.reduce((s, g) => s + g.nodeLat.length, 0);
   const nEdges = gs.reduce((s, g) => s + g.edgeA.length, 0);
+  const nodeLat = [], nodeLng = [];
+  const keyToIdx = new Map();
+  const edgeA = new Uint32Array(nEdges);
+  const edgeB = new Uint32Array(nEdges);
   const out = {
     bbox: null,
-    nodeLat: new Float64Array(nNodes),
-    nodeLng: new Float64Array(nNodes),
-    edgeA: new Uint32Array(nEdges),
-    edgeB: new Uint32Array(nEdges),
     edgeDist: new Float32Array(nEdges),
     edgeCls: new Uint8Array(nEdges),
     edgeDir: new Uint8Array(nEdges),
+    edgeA, edgeB,
   };
-  let nOff = 0, eOff = 0;
+
+  const mergedIdx = (lat, lng) => {
+    const k = coordKey(lat, lng);
+    let i = keyToIdx.get(k);
+    if (i === undefined) {
+      i = nodeLat.length;
+      keyToIdx.set(k, i);
+      nodeLat.push(lat);
+      nodeLng.push(lng);
+    }
+    return i;
+  };
+
+  let eOff = 0;
   for (const g of gs) {
-    out.nodeLat.set(g.nodeLat, nOff);
-    out.nodeLng.set(g.nodeLng, nOff);
+    // Map this region's local node indices to merged (deduped) indices.
+    const remap = new Uint32Array(g.nodeLat.length);
+    for (let i = 0; i < g.nodeLat.length; i++) {
+      remap[i] = mergedIdx(g.nodeLat[i], g.nodeLng[i]);
+    }
     out.edgeDist.set(g.edgeDist, eOff);
     out.edgeCls.set(g.edgeCls, eOff);
     out.edgeDir.set(g.edgeDir, eOff);
     for (let i = 0; i < g.edgeA.length; i++) {
-      out.edgeA[eOff + i] = g.edgeA[i] + nOff;
-      out.edgeB[eOff + i] = g.edgeB[i] + nOff;
+      edgeA[eOff + i] = remap[g.edgeA[i]];
+      edgeB[eOff + i] = remap[g.edgeB[i]];
     }
-    nOff += g.nodeLat.length;
     eOff += g.edgeA.length;
   }
+  out.nodeLat = Float64Array.from(nodeLat);
+  out.nodeLng = Float64Array.from(nodeLng);
   return out;
 }
 

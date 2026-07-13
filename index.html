@@ -15,7 +15,8 @@
 <div id="map"></div>
 
 <div id="toolbar" class="panel">
-  <div class="brand">brx</div>
+  <div class="brand">brx<button id="collapse" title="Collapse panel" aria-label="Collapse panel" aria-expanded="true">‹</button></div>
+  <div id="toolbar-body">
   <label>Engine
     <select id="engine">
       <option value="local">Local (offline)</option>
@@ -53,6 +54,7 @@
   </div>
   <div class="hint">Click the map to add waypoints · click the route to insert a via ·
     right-click a marker to delete · drag to move</div>
+  </div>
 </div>
 
 <div id="banner" class="banner" hidden>

@@ -364,3 +364,15 @@ reroute();
 writeUrl(true);
 registerPWA();
 setupInstall($('install'));
+
+// ---------------------------------------------------------------- collapse panel
+const toolbar = $('toolbar');
+const collapseBtn = $('collapse');
+function setCollapsed(on) {
+  toolbar.classList.toggle('collapsed', on);
+  collapseBtn.setAttribute('aria-expanded', String(!on));
+  collapseBtn.title = on ? 'Expand panel' : 'Collapse panel';
+  try { localStorage.setItem('brx-collapsed', on ? '1' : '0'); } catch {}
+}
+collapseBtn.onclick = () => setCollapsed(!toolbar.classList.contains('collapsed'));
+try { if (localStorage.getItem('brx-collapsed') === '1') setCollapsed(true); } catch {}
