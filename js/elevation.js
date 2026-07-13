@@ -1,5 +1,7 @@
 // Canvas elevation profile. Browser-only, no deps.
 
+import { computeSlopes, slopeRuns } from './slope.js';
+
 const PAD = { top: 10, right: 12, bottom: 20, left: 42 };
 
 function haversine(a, b) {
@@ -30,6 +32,7 @@ export function createElevationProfile(canvas, { onHover } = {}) {
   let total = 0;
   let hoverIdx = null;  // from mouse over canvas
   let highlightIdx = null; // from setHighlight (map hover)
+  let runs = null;      // slope-color runs (shared scale with the map), or null
 
   function ele(i) {
     const e = coords[i].ele;
@@ -43,6 +46,8 @@ export function createElevationProfile(canvas, { onHover } = {}) {
       if (i > 0) total += haversine(coords[i - 1], coords[i]);
       dists.push(total);
     }
+    const slopes = computeSlopes(coords);
+    runs = slopes ? slopeRuns(slopes) : null;
   }
 
   function draw() {
@@ -115,20 +120,23 @@ export function createElevationProfile(canvas, { onHover } = {}) {
     }
     ctx.globalAlpha = 1;
 
-    // filled area + line
-    ctx.beginPath();
-    ctx.moveTo(x(dists[0]), y(ele(0)));
-    for (let i = 1; i < coords.length; i++) ctx.lineTo(x(dists[i]), y(ele(i)));
-    ctx.strokeStyle = accent;
+    // filled area + line — slope-colored per run (same scale as the map)
+    // when elevations are usable, plain accent otherwise.
     ctx.lineWidth = 1.5;
-    ctx.stroke();
-    ctx.lineTo(x(dists[coords.length - 1]), PAD.top + ih);
-    ctx.lineTo(x(dists[0]), PAD.top + ih);
-    ctx.closePath();
-    ctx.globalAlpha = 0.25;
-    ctx.fillStyle = accent;
-    ctx.fill();
-    ctx.globalAlpha = 1;
+    for (const run of runs ?? [{ start: 0, end: coords.length - 1, color: accent }]) {
+      ctx.beginPath();
+      ctx.moveTo(x(dists[run.start]), y(ele(run.start)));
+      for (let i = run.start + 1; i <= run.end; i++) ctx.lineTo(x(dists[i]), y(ele(i)));
+      ctx.strokeStyle = run.color;
+      ctx.stroke();
+      ctx.lineTo(x(dists[run.end]), PAD.top + ih);
+      ctx.lineTo(x(dists[run.start]), PAD.top + ih);
+      ctx.closePath();
+      ctx.globalAlpha = 0.25;
+      ctx.fillStyle = run.color;
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    }
 
     // highlight marker (from map hover)
     if (highlightIdx != null && coords[highlightIdx]) {
@@ -194,7 +202,8 @@ export function createElevationProfile(canvas, { onHover } = {}) {
     return lo;
   }
 
-  function onMouseMove(ev) {
+  // Pointer events so scrubbing works with both mouse and touch.
+  function onPointerScrub(ev) {
     const rect = canvas.getBoundingClientRect();
     const idx = nearestIndex(ev.clientX - rect.left);
     if (idx !== hoverIdx) {
@@ -204,7 +213,7 @@ export function createElevationProfile(canvas, { onHover } = {}) {
     }
   }
 
-  function onMouseLeave() {
+  function onPointerEnd() {
     if (hoverIdx !== null) {
       hoverIdx = null;
       draw();
@@ -212,8 +221,11 @@ export function createElevationProfile(canvas, { onHover } = {}) {
     if (onHover) onHover(null);
   }
 
-  canvas.addEventListener("mousemove", onMouseMove);
-  canvas.addEventListener("mouseleave", onMouseLeave);
+  canvas.style.touchAction = "none"; // keep touch drags as scrubs, not page pans
+  canvas.addEventListener("pointermove", onPointerScrub);
+  canvas.addEventListener("pointerdown", onPointerScrub);
+  canvas.addEventListener("pointerleave", onPointerEnd);
+  canvas.addEventListener("pointercancel", onPointerEnd);
   const ro = new ResizeObserver(() => draw());
   ro.observe(canvas);
 
@@ -230,8 +242,10 @@ export function createElevationProfile(canvas, { onHover } = {}) {
       draw();
     },
     destroy() {
-      canvas.removeEventListener("mousemove", onMouseMove);
-      canvas.removeEventListener("mouseleave", onMouseLeave);
+      canvas.removeEventListener("pointermove", onPointerScrub);
+      canvas.removeEventListener("pointerdown", onPointerScrub);
+      canvas.removeEventListener("pointerleave", onPointerEnd);
+      canvas.removeEventListener("pointercancel", onPointerEnd);
       ro.disconnect();
     },
   };

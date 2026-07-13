@@ -1,3 +1,5 @@
+import { showNotice } from "./notice.js";
+
 // Registers the service worker in supported, secure-enough contexts.
 // Silent no-op everywhere else (unsupported browser, plain http on a
 // non-localhost host, file: pages, etc).
@@ -36,7 +38,8 @@ export function setupInstall(button) {
   if (isIOS) {
     button.hidden = false;
     button.onclick = () =>
-      alert('To install: tap the Share button, then "Add to Home Screen".');
+      showNotice('To install: tap the Share button, then "Add to Home Screen".',
+        [{ label: "OK", value: true }], { cancel: false });
     return;
   }
 

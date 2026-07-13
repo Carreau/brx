@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
 <title>brx — offline routing, shareable URLs</title>
 <meta name="theme-color" content="#1e1e28">
 <meta name="mobile-web-app-capable" content="yes">
@@ -34,7 +34,10 @@
     <div class="row">
       <button id="download-region" title="Download roads in the visible area for offline routing">⬇ Download visible area</button>
     </div>
-    <div id="region-progress" class="hint" hidden></div>
+    <div id="region-progress" class="hint progress" hidden>
+      <span class="progress-label"></span>
+      <div class="progress-track"><div class="progress-fill"></div></div>
+    </div>
     <ul id="region-list"></ul>
   </details>
   <button id="install" hidden title="Install brx on this device">📲 Install app</button>
@@ -52,19 +55,64 @@
     <span id="stat-ascend"></span>
     <span id="stat-time"></span>
   </div>
-  <div class="hint">Click the map to add waypoints · click the route to insert a via ·
-    right-click a marker to delete · drag to move</div>
+  <div class="hint">Tap the map to add a waypoint · tap the route to insert a via ·
+    drag markers to move · tap a marker to select/delete</div>
   </div>
 </div>
 
 <div id="banner" class="banner" hidden>
   <span id="banner-text"></span>
   <button id="banner-fallback" hidden>Route online instead</button>
+  <button id="banner-download" hidden>Download this area</button>
   <button id="banner-close">✕</button>
 </div>
 
+<div id="wp-chip" class="panel wp-chip" hidden>
+  <span id="wp-chip-text"></span>
+  <button id="wp-chip-move">Move precisely</button>
+  <button id="wp-chip-delete" class="danger">Delete</button>
+</div>
+
+<div id="crosshair" hidden aria-hidden="true"></div>
+<div id="xh-chip" class="panel wp-chip" hidden>
+  <span class="hint">Pan the map to aim</span>
+  <button id="xh-ok">Add here</button>
+  <button id="xh-cancel">Cancel</button>
+</div>
+
+<div id="fabs">
+  <button id="locate" class="fab" title="Show my location" aria-label="Show my location">⌖</button>
+  <button id="undo" class="fab" hidden title="Undo last edit" aria-label="Undo last edit">↩</button>
+</div>
+
 <div id="elevation-panel" class="panel elevation" hidden>
+  <button id="elev-expand" title="Expand elevation profile" aria-label="Expand elevation profile" aria-expanded="false">⌃</button>
   <canvas id="elevation"></canvas>
+</div>
+
+<div id="dl-toast" class="progress" hidden>
+  <span class="progress-label"></span>
+  <div class="progress-track"><div class="progress-fill"></div></div>
+</div>
+
+<div id="bottombar">
+  <div id="bb-stats">
+    <span id="bb-dist"></span>
+    <span id="bb-ascend"></span>
+    <span id="bb-time"></span>
+  </div>
+  <div id="bb-profiles" role="group" aria-label="Routing profile">
+    <button data-profile="bike" title="Bike" aria-label="Bike">🚲</button>
+    <button data-profile="foot" title="Walk" aria-label="Walk">🚶</button>
+    <button data-profile="car" title="Car" aria-label="Car">🚗</button>
+  </div>
+  <button id="bb-menu" title="Menu" aria-label="Open menu">≡</button>
+</div>
+
+<div id="sheet-scrim" hidden></div>
+<div id="sheet">
+  <div id="sheet-handle" role="button" aria-label="Close menu"></div>
+  <div id="sheet-scroll"></div>
 </div>
 
 <script type="module" src="/js/app.js"></script>

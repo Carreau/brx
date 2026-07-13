@@ -3,6 +3,7 @@
 
 import {
   buildGraphFromOverpass, mergeGraphs, nearestNode, astar,
+  demSample, filteredAscent,
 } from "./localgraph.js";
 
 const DB_NAME = "brx";
@@ -50,6 +51,7 @@ async function deleteRegion(id) {
 // ---- merged graph state --------------------------------------------------
 
 let merged = null;
+let dems = []; // per-region DEM grids (regions stored without one are skipped)
 
 function graphFromRegion(r) {
   return {
@@ -63,12 +65,16 @@ function graphFromRegion(r) {
 async function reload() {
   const regions = await getAllRegions();
   merged = regions.length ? mergeGraphs(regions.map(graphFromRegion)) : null;
+  dems = regions
+    .filter((r) => r.demData)
+    .map(({ demZ, demX0, demY0, demW, demH, demData }) =>
+      ({ demZ, demX0, demY0, demW, demH, demData }));
   return { regions: regions.length };
 }
 
 function regionMeta(r) {
   const bytes = [r.nodeLat, r.nodeLng, r.edgeA, r.edgeB, r.edgeDist,
-    r.edgeCls, r.edgeDir].reduce((s, a) => s + (a?.byteLength || 0), 0);
+    r.edgeCls, r.edgeDir, r.demData].reduce((s, a) => s + (a?.byteLength || 0), 0);
   return {
     id: r.id, name: r.name, bbox: r.bbox, createdAt: r.createdAt,
     nodeCount: r.nodeLat.length, edgeCount: r.edgeA.length, bytes,
@@ -99,7 +105,25 @@ async function route({ from, to, profile }) {
   const coords = res.path.map((n) => ({
     lat: merged.nodeLat[n], lng: merged.nodeLng[n],
   }));
-  return { coords, distance: res.distance, time: res.time, ascend: 0 };
+  // Elevation from whichever region's DEM covers each point (regions stored
+  // before DEM support simply contribute nothing).
+  let ascend = 0;
+  if (dems.length) {
+    const eles = coords.map((c) => sampleEle(c.lat, c.lng));
+    coords.forEach((c, i) => {
+      if (Number.isFinite(eles[i])) c.ele = Math.round(eles[i] * 10) / 10;
+    });
+    ascend = Math.round(filteredAscent(eles));
+  }
+  return { coords, distance: res.distance, time: res.time, ascend };
+}
+
+function sampleEle(lat, lng) {
+  for (const d of dems) {
+    const e = demSample(d, lat, lng);
+    if (Number.isFinite(e)) return e;
+  }
+  return NaN;
 }
 
 // ---- message dispatch ----------------------------------------------------

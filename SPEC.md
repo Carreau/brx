@@ -31,8 +31,22 @@ A stored region (IndexedDB db `brx`, objectStore `regions`, keyPath `id`):
   edgeDist: Float32Array,// meters (haversine)
   edgeCls: Uint8Array,   // index into HIGHWAY_CLASSES
   edgeDir: Uint8Array,   // 0 = both ways, 1 = a->b only, 2 = b->a only
+  // Optional DEM covering bbox (absent on regions saved before DEM support,
+  // or when the elevation download failed — everything still works, minus ele):
+  demZ: number,          // terrarium tile zoom (≤12, ≤~48 tiles per region)
+  demX0: number, demY0: number, // tile-grid origin (slippy x/y at demZ)
+  demW: number, demH: number,   // grid size in tiles (pixels = *256)
+  demData: Int16Array,   // heights, meters; -32768 = missing tile
 }
 ```
+
+Elevation comes from the AWS Open Data terrarium terrain tiles
+(`s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png`, height =
+R\*256 + G + B/256 − 32768), decoded on the main thread during
+`downloadRegion` (progress stage `dem`). The worker bilinearly samples the
+grid to attach `ele` to route coords and reports `ascend` as a *filtered*
+ascent (climbs only count once confirmed by a ≥10 m descent) so DEM noise
+doesn't inflate it.
 
 `HIGHWAY_CLASSES` (exported constant, order matters):
 `motorway, motorway_link, trunk, trunk_link, primary, primary_link, secondary,
@@ -51,12 +65,13 @@ Main-thread facade over the engine:
   - `async listRegions()` → `[{id, name, bbox, createdAt, nodeCount, edgeCount, bytes}]`
   - `async downloadRegion({bbox, name, onProgress})` → region meta.
     Fetches Overpass (`[out:json][timeout:90]`, ways with the highway classes
-    above, `out body geom qt`), builds the graph, stores it. `onProgress(stage, pct?)`
-    with stages like `download`/`build`/`store`.
+    above, `out body geom qt`), builds the graph, downloads the DEM, stores it.
+    `onProgress(stage, pct?)` with stages like `download`/`build`/`dem`/`store`.
   - `async deleteRegion(id)`
   - `async routeSegment({from, to, profile, signal})` →
-    `{coords: [{lat, lng}], distance, time, ascend: 0}` — same shape as
-    js/routing.js but no `ele`. Throws Error('No routing data here — download
+    `{coords: [{lat, lng, ele?}], distance, time, ascend}` — same shape as
+    js/routing.js; `ele` present where a stored region has DEM coverage
+    (`ascend: 0` and no `ele` otherwise). Throws Error('No routing data here — download
     this region first') when either endpoint snaps to nothing within ~250 m,
     Error('No route found') when A* fails.
 - Worker owns graph memory (loads all stored regions, merged); main thread

@@ -9,7 +9,31 @@
 }
 
 html, body { margin: 0; height: 100%; }
+body {
+  height: 100dvh;
+  overscroll-behavior: none;
+  -webkit-tap-highlight-color: transparent;
+}
 [hidden] { display: none !important; }
+
+.progress-track {
+  height: 4px;
+  margin-top: 6px;
+  border-radius: 2px;
+  background: var(--panel-bg-soft);
+  overflow: hidden;
+}
+.progress-fill {
+  height: 100%;
+  width: 40%;
+  border-radius: 2px;
+  background: var(--accent);
+  animation: progress-sweep 1.2s ease-in-out infinite;
+}
+@keyframes progress-sweep {
+  from { transform: translateX(-100%); }
+  to   { transform: translateX(250%); }
+}
 #map { position: absolute; inset: 0; }
 
 .panel {
@@ -23,8 +47,8 @@ html, body { margin: 0; height: 100%; }
 }
 
 #toolbar {
-  top: 12px;
-  left: 12px;
+  top: calc(12px + env(safe-area-inset-top, 0px));
+  left: calc(12px + env(safe-area-inset-left, 0px));
   width: 230px;
   display: flex;
   flex-direction: column;
@@ -64,7 +88,9 @@ html, body { margin: 0; height: 100%; }
 #toolbar.collapsed #toolbar-body { display: none; }
 #toolbar.collapsed #collapse { transform: rotate(180deg); }
 
-#toolbar label {
+/* Scoped to #toolbar-body (not #toolbar): the body node is physically moved
+   into the phone bottom sheet, and must keep its styling there. */
+#toolbar-body label {
   display: flex;
   flex-direction: column;
   gap: 3px;
@@ -74,13 +100,13 @@ html, body { margin: 0; height: 100%; }
   letter-spacing: .04em;
 }
 
-#toolbar select, #toolbar input[type="text"] {
+#toolbar-body select, #toolbar-body input[type="text"] {
   background: var(--panel-bg-soft);
   color: var(--text);
   border: 1px solid #3a3a4c;
   border-radius: 6px;
   padding: 6px 8px;
-  font-size: 13px;
+  font-size: 16px; /* ≥16px kills iOS focus-zoom */
   width: 100%;
   box-sizing: border-box;
 }
@@ -93,7 +119,7 @@ button {
   border: 1px solid #3a3a4c;
   border-radius: 6px;
   padding: 6px 10px;
-  font-size: 12px;
+  font-size: 15px;
   cursor: pointer;
   flex: 1;
 }
@@ -144,7 +170,7 @@ button:disabled { opacity: .45; cursor: default; }
 .banner {
   position: absolute;
   z-index: 1100;
-  top: 12px;
+  top: calc(12px + env(safe-area-inset-top, 0px));
   left: 50%;
   transform: translateX(-50%);
   max-width: 60vw;
@@ -162,9 +188,9 @@ button:disabled { opacity: .45; cursor: default; }
 #banner-close { padding: 4px 8px; }
 
 .elevation {
-  left: 12px;
-  right: 12px;
-  bottom: 12px;
+  left: calc(12px + env(safe-area-inset-left, 0px));
+  right: calc(12px + env(safe-area-inset-right, 0px));
+  bottom: calc(12px + env(safe-area-inset-bottom, 0px));
   height: 150px;
   padding: 6px;
 }
@@ -187,8 +213,267 @@ button:disabled { opacity: .45; cursor: default; }
 }
 .wp-icon.start { background: #2e9e44; }
 .wp-icon.end   { background: #d43f3f; }
+.wp-icon.selected { box-shadow: 0 0 0 3px var(--accent), 0 1px 5px rgba(0, 0, 0, .5); }
+
+/* Selected-waypoint chip, floating near the bottom of the map. */
+.wp-chip {
+  /* Above the elevation panel (1000) and bottom bar (1050), below the
+     sheet scrim (1150), dl-toast (1300) and notice-chip (1400). */
+  z-index: 1120;
+  left: 50%;
+  bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  font-size: 13px;
+  white-space: nowrap;
+}
+.wp-chip button.danger,
+.notice-chip button.danger {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: #fff;
+}
+
+/* Non-blocking notice/confirm chip (js/notice.js) — replaces alert/confirm. */
+.notice-chip {
+  left: 50%;
+  bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+  transform: translateX(-50%);
+  z-index: 1400;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  max-width: min(440px, 92vw);
+  font-size: 13px;
+  line-height: 1.4;
+}
+.notice-chip span { flex: 1 1 100%; }
+
+/* Floating action buttons (locate, undo), thumb-reachable on the right edge. */
+#fabs {
+  position: absolute;
+  z-index: 1120; /* same layer as the chips: above elevation, below the sheet */
+  right: calc(12px + env(safe-area-inset-right, 0px));
+  bottom: calc(96px + env(safe-area-inset-bottom, 0px));
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.fab {
+  width: 46px;
+  height: 46px;
+  flex: none;
+  border-radius: 50%;
+  font-size: 20px;
+  line-height: 1;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, .35);
+}
+#locate { font-size: 24px; }
+#locate.locating { border-color: #2b7de9; color: #2b7de9; }
+#locate.following { background: #2b7de9; border-color: #2b7de9; color: #fff; }
+
+/* "You are here": blue dot + heading arrow (rotated from JS). */
+.loc-dot {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #2b7de9;
+  border: 3px solid #fff;
+  box-shadow: 0 1px 6px rgba(0, 0, 0, .5);
+  box-sizing: border-box;
+  position: relative;
+}
+.loc-heading {
+  position: absolute;
+  inset: -10px; /* rotates around the dot center; arrow sits at 12 o'clock */
+}
+.loc-heading::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: -3px;
+  transform: translateX(-50%);
+  border: 5px solid transparent;
+  border-top: 0;
+  border-bottom: 9px solid #2b7de9;
+  filter: drop-shadow(0 0 1px #fff);
+}
+
+/* Crosshair precision-add: fixed center reticle, the map pans underneath. */
+#crosshair {
+  position: absolute;
+  z-index: 1000;
+  left: 50%;
+  top: 50%;
+  width: 44px;
+  height: 44px;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+#crosshair::before, #crosshair::after {
+  content: '';
+  position: absolute;
+  background: var(--accent);
+  box-shadow: 0 0 3px rgba(0, 0, 0, .7);
+}
+#crosshair::before { left: 0; right: 0; top: 50%; height: 2px; margin-top: -1px; }
+#crosshair::after { top: 0; bottom: 0; left: 50%; width: 2px; margin-left: -1px; }
+
+/* ---- Phone layout: bottom bar, bottom sheet, docked elevation ---- */
+/* Desktop default: none of the phone chrome exists. */
+#bottombar, #sheet, #sheet-scrim, #elev-expand, #dl-toast { display: none; }
 
 @media (max-width: 640px) {
-  #toolbar { width: calc(100vw - 48px); }
   .banner { max-width: 85vw; }
+  #toolbar { display: none; }
+  /* Keep Leaflet's bottom controls (scale, attribution) above the bar. */
+  .leaflet-bottom { bottom: calc(56px + env(safe-area-inset-bottom, 0px)); }
+
+  #bottombar {
+    position: absolute;
+    z-index: 1050;
+    left: 0; right: 0; bottom: 0;
+    height: 56px;
+    padding: 0 10px calc(env(safe-area-inset-bottom, 0px));
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--panel-bg);
+    color: var(--text);
+    box-shadow: 0 -4px 18px rgba(0, 0, 0, .35);
+  }
+  #bb-stats {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    gap: 8px;
+    font-size: 15px;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    overflow: hidden;
+  }
+  #bb-profiles {
+    flex: none;
+    display: flex;
+    border: 1px solid #3a3a4c;
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  #bb-profiles button {
+    flex: none;
+    width: 46px;
+    border: none;
+    border-radius: 0;
+    font-size: 19px;
+    padding: 6px 0;
+  }
+  #bb-profiles button.active { background: var(--accent); }
+  #bb-menu { flex: none; width: 46px; font-size: 22px; padding: 6px 0; }
+
+  #sheet-scrim {
+    display: block;
+    position: absolute;
+    inset: 0;
+    z-index: 1150;
+    background: rgba(0, 0, 0, .4);
+  }
+  #sheet {
+    display: flex;
+    flex-direction: column;
+    position: absolute;
+    z-index: 1200;
+    left: 0; right: 0; bottom: 0;
+    height: 50dvh;
+    box-sizing: border-box;
+    background: var(--panel-bg);
+    color: var(--text);
+    font-size: 13px;
+    border-radius: 14px 14px 0 0;
+    padding: 0 14px calc(12px + env(safe-area-inset-bottom, 0px));
+    box-shadow: 0 -6px 24px rgba(0, 0, 0, .45);
+    transform: translateY(105%);
+    visibility: hidden;
+    transition: transform .25s ease, visibility 0s .25s;
+  }
+  #sheet.open { transform: none; visibility: visible; transition: transform .25s ease; }
+  #sheet-handle { flex: none; padding: 8px 0 12px; cursor: pointer; }
+  #sheet-handle::before {
+    content: '';
+    display: block;
+    width: 44px;
+    height: 5px;
+    border-radius: 3px;
+    background: var(--muted);
+    margin: 0 auto;
+  }
+  #sheet-scroll { flex: 1; min-height: 0; overflow-y: auto; }
+
+  /* Elevation: collapsed strip docked above the bar; tap the handle to expand. */
+  .elevation {
+    left: 0; right: 0;
+    bottom: calc(56px + env(safe-area-inset-bottom, 0px));
+    height: 56px;
+    border-radius: 10px 10px 0 0;
+    padding: 4px 6px;
+    transition: height .2s ease;
+  }
+  .elevation.expanded { height: 40vh; }
+  #elev-expand {
+    display: block;
+    position: absolute;
+    top: 4px; right: 8px;
+    z-index: 1;
+    width: 44px; height: 30px;
+    min-height: 30px;
+    padding: 0;
+    font-size: 15px;
+    line-height: 1;
+    flex: none;
+  }
+
+  /* Download-progress toast, visible above the bar even with the sheet closed. */
+  #dl-toast {
+    display: block;
+    position: absolute;
+    z-index: 1300;
+    left: 50%;
+    transform: translateX(-50%);
+    bottom: calc(68px + env(safe-area-inset-bottom, 0px));
+    background: var(--panel-bg);
+    color: var(--text);
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 13px;
+    white-space: nowrap;
+    box-shadow: 0 4px 18px rgba(0, 0, 0, .35);
+  }
+
+  /* Clear the bar + elevation strip. */
+  #fabs { bottom: calc(140px + env(safe-area-inset-bottom, 0px)); }
+  .wp-chip {
+    bottom: calc(124px + env(safe-area-inset-bottom, 0px));
+    max-width: 94vw;
+    flex-wrap: wrap;
+    justify-content: center;
+    white-space: normal;
+  }
+  .notice-chip { bottom: calc(124px + env(safe-area-inset-bottom, 0px)); }
+}
+
+@media (pointer: coarse) {
+  button { min-height: 44px; }
+  #collapse { width: 40px; height: 40px; min-height: 40px; }
+  #region-list button { min-height: 40px; min-width: 40px; }
+  #banner-close { min-height: 40px; min-width: 40px; }
+  /* 30px visual circle centered in the 40px divIcon hit area (see map.js). */
+  .wp-icon {
+    width: 30px;
+    height: 30px;
+    margin: 5px;
+    font-size: 13px;
+  }
 }

@@ -2,6 +2,7 @@
 // map, and the Overpass download flow. Pure graph logic lives in localgraph.js.
 
 import { overpassQuery, buildGraphFromOverpass } from "./localgraph.js";
+import { buildDEM } from "./dem.js";
 
 // Tried in order; public instances rate-limit aggressively.
 const OVERPASS_URLS = [
@@ -101,14 +102,46 @@ export function createLocalRouter() {
       res = null;
     }
     if (!res) throw lastError ?? new Error("Overpass request failed");
-    const data = await res.json().catch(() => {
+    let text;
+    if (res.body?.getReader) {
+      // Stream the body so we can report download progress. Content-Length is
+      // the compressed size while the reader yields decompressed bytes, so a
+      // ratio would lie — report loaded bytes only.
+      const reader = res.body.getReader();
+      const chunks = [];
+      let loaded = 0;
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        chunks.push(value);
+        loaded += value.byteLength;
+        progress("download", { loaded });
+      }
+      const buf = new Uint8Array(loaded);
+      let off = 0;
+      for (const c of chunks) { buf.set(c, off); off += c.byteLength; }
+      text = new TextDecoder().decode(buf);
+    } else {
+      text = await res.text();
+    }
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch {
       throw new Error("Overpass returned invalid JSON");
-    });
+    }
     const elements = data.elements || [];
     if (!elements.length) throw new Error("No roads found in this region");
 
     progress("build");
     const graph = buildGraphFromOverpass(elements, bbox);
+
+    // Elevation grid (terrarium tiles). Optional: a failure (offline tiles,
+    // decode error) must not fail the region — routes just won't have `ele`.
+    let dem = null;
+    try {
+      dem = await buildDEM(bbox, (done, total) => progress("dem", { done, total }));
+    } catch { /* proceed without elevation */ }
 
     progress("store");
     const id = regionId(name, bbox);
@@ -118,12 +151,15 @@ export function createLocalRouter() {
       nodeLat: graph.nodeLat, nodeLng: graph.nodeLng,
       edgeA: graph.edgeA, edgeB: graph.edgeB,
       edgeDist: graph.edgeDist, edgeCls: graph.edgeCls, edgeDir: graph.edgeDir,
+      ...(dem && { demZ: dem.z, demX0: dem.x0, demY0: dem.y0,
+        demW: dem.w, demH: dem.h, demData: dem.data }),
     };
     // Capture meta before transfer detaches the buffers on this thread.
     const nodeCount = graph.nodeLat.length, edgeCount = graph.edgeA.length;
     const transfer = [graph.nodeLat.buffer, graph.nodeLng.buffer,
       graph.edgeA.buffer, graph.edgeB.buffer, graph.edgeDist.buffer,
       graph.edgeCls.buffer, graph.edgeDir.buffer];
+    if (dem) transfer.push(dem.data.buffer);
     const bytes = transfer.reduce((s, b) => s + b.byteLength, 0);
     await send("put", region, undefined, transfer);
     await send("reload");

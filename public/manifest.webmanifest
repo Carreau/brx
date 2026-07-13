@@ -2,6 +2,7 @@
   "name": "brx",
   "short_name": "brx",
   "display": "standalone",
+  "orientation": "any",
   "start_url": "/",
   "theme_color": "#1e1e28",
   "background_color": "#1e1e28",
@@ -17,6 +18,12 @@
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
+    },
+    {
+      "src": "/icon-maskable.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
     }
   ]
 }

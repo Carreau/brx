@@ -159,6 +159,51 @@ export function mergeGraphs(graphs) {
   return out;
 }
 
+// ---- DEM sampling ----------------------------------------------------------
+// dem: {demZ, demX0, demY0, demW, demH, demData} per the region record —
+// terrarium tile grid at zoom demZ, origin tile (demX0, demY0), demW×demH
+// tiles of 256px. Bilinear sample; NaN when outside or over missing tiles.
+
+const DEM_NODATA = -32768;
+
+export function demSample(dem, lat, lng) {
+  const world = 2 ** dem.demZ * 256; // world size in pixels at this zoom
+  const r = (lat * Math.PI) / 180;
+  const px = ((lng + 180) / 360) * world - dem.demX0 * 256;
+  const py = ((1 - Math.log(Math.tan(r) + 1 / Math.cos(r)) / Math.PI) / 2) *
+    world - dem.demY0 * 256;
+  const W = dem.demW * 256, H = dem.demH * 256;
+  if (px < 0 || py < 0 || px >= W || py >= H) return NaN;
+  // Bilinear over pixel centers, clamped at the grid edge.
+  const fx = Math.min(Math.max(px - 0.5, 0), W - 1);
+  const fy = Math.min(Math.max(py - 0.5, 0), H - 1);
+  const x0 = Math.floor(fx), y0 = Math.floor(fy);
+  const x1 = Math.min(x0 + 1, W - 1), y1 = Math.min(y0 + 1, H - 1);
+  const d = dem.demData;
+  const v00 = d[y0 * W + x0], v10 = d[y0 * W + x1];
+  const v01 = d[y1 * W + x0], v11 = d[y1 * W + x1];
+  if (v00 === DEM_NODATA || v10 === DEM_NODATA ||
+      v01 === DEM_NODATA || v11 === DEM_NODATA) return NaN;
+  const tx = fx - x0, ty = fy - y0;
+  return (v00 * (1 - tx) + v10 * tx) * (1 - ty) +
+         (v01 * (1 - tx) + v11 * tx) * ty;
+}
+
+// BRouter-style filtered ascent: only climbs confirmed by a ≥`T` m descent
+// (or the route end) count, so per-sample DEM noise doesn't accumulate.
+// Non-finite entries (no DEM coverage) are skipped.
+export function filteredAscent(eles, T = 10) {
+  let asc = 0, min = Infinity, max = -Infinity;
+  for (const e of eles) {
+    if (!Number.isFinite(e)) continue;
+    if (e < min) { min = max = e; }      // new low: pending climb was noise/descent
+    else if (e > max) max = e;
+    if (max - e >= T) { asc += max - min; min = max = e; } // climb confirmed
+  }
+  if (max > min) asc += max - min;
+  return asc;
+}
+
 // ---- Nearest node --------------------------------------------------------
 
 export function nearestNode(graph, lat, lng, maxMeters = Infinity) {

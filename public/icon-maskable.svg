@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Maskable variant: full-bleed background, artwork kept inside the
+       center 80% safe zone so any platform mask shape works. -->
+  <rect width="512" height="512" fill="#1e1e28"/>
+  <polyline points="152,356 220,220 288,296 364,152" fill="none" stroke="#ff6b35"
+            stroke-width="52" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="152" cy="356" r="30" fill="#f5f5f7"/>
+  <circle cx="364" cy="152" r="30" fill="#f5f5f7"/>
+</svg>
